@@ -411,6 +411,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "geoutils"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4635c5c079227d2e54fe0f69b3f1ac9376a517608762267975ee1603fa0800bf"
+
+[[package]]
 name = "getrandom"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1622,9 +1628,11 @@ name = "ya_bike_bot"
 version = "0.1.0"
 dependencies = [
  "dotenv",
+ "geoutils",
  "log",
  "pretty_env_logger",
  "serde",
+ "serde_json",
  "surf",
  "teloxide",
  "tokio",
