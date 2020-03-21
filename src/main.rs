@@ -1,30 +1,50 @@
-use actix_web::{get, middleware, web, App, HttpServer, Responder};
-mod config;
-mod telegram;
-use config::Config;
 use dotenv;
-use telegram::Telegram;
+mod bike_service;
+use std::env;
+use teloxide::prelude::*;
+use teloxide::types::{MediaKind, MessageKind};
 
-#[get("/{id}/{name}/index.html")]
-async fn index(info: web::Path<(u32, String)>) -> impl Responder {
-    format!("Hello {}! id:{}", info.1, info.0)
+#[tokio::main]
+async fn main() {
+    dotenv::dotenv().ok();
+    run().await;
 }
 
-#[actix_rt::main]
-async fn main() -> std::io::Result<()> {
-    dotenv::dotenv().ok();
-    let Config { token, host } = Config::new().expect("Missing env variables");
-    let telegram = Telegram::new(token);
-    telegram
-        .set_webhook(host)
-        .await
-        .expect("Error while setting webhook");
-    HttpServer::new(|| {
-        App::new()
-            .wrap(middleware::Logger::default())
-            .service(index)
-    })
-    .bind("127.0.0.1:8080")?
-    .run()
-    .await
+async fn run() {
+    teloxide::enable_logging!();
+    log::info!("Starting ping_pong_bot!");
+    let token = env::var("TOKEN").expect("Missing TOKEN env");
+
+    let bot = Bot::new(token);
+
+    Dispatcher::new(bot)
+        .messages_handler(|rx: DispatcherHandlerRx<Message>| {
+            rx.for_each(|context| async move {
+                let message = &context.update;
+                if let MessageKind::Common { media_kind, .. } = &message.kind {
+                    if let MediaKind::Location { .. } = media_kind {
+                        handle_location_message(context).await
+                    } else {
+                        context.answer("???").send().await.log_on_error().await
+                    }
+                }
+            })
+        })
+        .dispatch()
+        .await;
+}
+
+async fn handle_location_message(context: DispatcherHandlerCx<Message>) {
+    if let Ok(networks) = bike_service::fetch_networks().await {
+        let network = networks.first();
+        log::info!("{:?}", network);
+        context.answer("ok").send().await.log_on_error().await;
+    } else {
+        context
+            .answer("achei nada")
+            .send()
+            .await
+            .log_on_error()
+            .await;
+    }
 }
