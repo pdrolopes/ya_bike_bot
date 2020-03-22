@@ -48,8 +48,18 @@ async fn build_near_stations_message(location: &Location) -> String {
     match find_near_stations(location).await {
         Ok(stations) => {
             let first_five: Vec<String> = stations.iter().map(|s| s.name.clone()).take(5).collect();
+            let sum: u32 = stations
+                .iter()
+                .take(5)
+                .map(|s| s.free_bikes.unwrap_or_default())
+                .sum();
             log::debug!("{:?}", first_five);
-            format!("Found {} stations. {:?}", stations.len(), first_five)
+            format!(
+                "Found {} stations. {:?}, Free Bikes {}",
+                stations.len(),
+                first_five,
+                sum
+            )
         }
         Err(err) => {
             log::error!("Error fetching stations {:?}", err);
@@ -68,10 +78,9 @@ async fn find_near_stations(location: &Location) -> Result<Vec<Station>, AsyncEr
     networks.sort_by_key(|network| {
         user_location
             .distance_to(&network.location())
-            .unwrap_or(geoutils::Distance::from_meters(INFINITY))
+            .unwrap_or_else(|_| geoutils::Distance::from_meters(INFINITY))
             .meters() as u32
     });
-    //TODO remove unwrap
     // log::info!("{:?}", network);
     let mut stations = if let Some(network) = networks.first() {
         network.stations().await?
@@ -82,7 +91,7 @@ async fn find_near_stations(location: &Location) -> Result<Vec<Station>, AsyncEr
     stations.sort_by_key(|station| {
         user_location
             .distance_to(&station.location())
-            .unwrap_or(geoutils::Distance::from_meters(INFINITY))
+            .unwrap_or_else(|_| geoutils::Distance::from_meters(INFINITY))
             .meters() as u32
     });
     Ok(stations)

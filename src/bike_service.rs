@@ -12,28 +12,28 @@ pub struct Location {
 }
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Network {
-    href: String,
+    href: Option<String>,
     location: Location,
     stations: Option<Vec<Station>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Station {
-    free_bikes: u32,
-    empty_slots: u32,
+    pub free_bikes: Option<u32>,
+    empty_slots: Option<u32>,
     id: String,
     latitude: f64,
     longitude: f64,
     pub name: String,
     timestamp: String, //TODO see how to manipulate dates
-    extra: Extra,
+    extra: Option<Extra>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Extra {
-    address: String,
-    description: String,
-    status: String,
+    address: Option<String>,
+    description: Option<String>,
+    // status: Option<String>,
 }
 
 pub async fn fetch_networks() -> Result<Vec<Network>, Exception> {
@@ -54,7 +54,10 @@ impl Network {
             network: Network,
         }
         let Network { href, .. } = self;
-        let Response { network } = surf::get(CITYBIKES_HOST.to_string() + &href)
+        if href.is_none() {
+            return Ok(vec![]);
+        }
+        let Response { network } = surf::get(CITYBIKES_HOST.to_string() + href.as_ref().unwrap())
             .recv_json()
             .await?;
         let Network { stations, .. } = network;
@@ -83,11 +86,25 @@ impl Geo for Station {
 #[cfg(test)]
 mod test {
     use super::*;
+    // Wrote this tests just to verify if i am parsing correctly any JSON that might come from
+    // citybik.es api.
 
     #[tokio::test]
-    async fn test_networks() {
+    async fn test_fetch_network() {
         let result = fetch_networks().await;
-        println!("{:#?}", result);
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_fetch_station() {
+        let networks = fetch_networks().await.unwrap();
+        for network in networks {
+            let href = network.href.as_ref().unwrap();
+            println!("{}", href);
+            let result = network.stations().await;
+            if result.is_err() {
+                println!("Failed on this href: '{}'", result.as_ref().err().unwrap());
+            }
+        }
     }
 }
