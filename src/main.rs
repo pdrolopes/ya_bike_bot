@@ -4,8 +4,12 @@ use bike_service::{Geo, Station};
 use geoutils;
 use std::env;
 use std::f64::INFINITY;
+use surf::Exception;
 use teloxide::prelude::*;
 use teloxide::types::{Location, MediaKind, MessageKind};
+const SMALL_BIKE_AMOUNT: u32 = 6;
+const STATION_MAX_TAKE: usize = 5;
+const STATION_MIN_TAKE: usize = 3;
 
 #[tokio::main]
 async fn main() {
@@ -45,34 +49,31 @@ async fn run() {
         .await;
 }
 async fn build_near_stations_message(location: &Location) -> String {
-    match find_near_stations(location).await {
-        Ok(stations) => {
-            let first_five: Vec<String> = stations.iter().map(|s| s.name.clone()).take(5).collect();
-            let sum: u32 = stations
-                .iter()
-                .take(5)
-                .map(|s| s.free_bikes.unwrap_or_default())
-                .sum();
-            log::debug!("{:?}", first_five);
-            format!(
-                "Found {} stations. {:?}, Free Bikes {}",
-                stations.len(),
-                first_five,
-                sum
-            )
-        }
+    let stations = match find_near_stations(location).await {
+        Ok(stations) => stations,
         Err(err) => {
             log::error!("Error fetching stations {:?}", err);
-            "No stations found".to_string()
+            return "No stations found.".to_string();
         }
-    }
+    };
+    let is_small_amount: bool = stations
+        .iter()
+        .take(SMALL_BIKE_AMOUNT as usize)
+        .map(|s| s.free_bikes.unwrap_or_default()) // defaults to 0
+        .sum::<u32>()
+        <= SMALL_BIKE_AMOUNT;
+    let take = if is_small_amount {
+        STATION_MAX_TAKE
+    } else {
+        STATION_MIN_TAKE
+    };
+    let station_names: Vec<String> = stations.iter().map(|s| s.name.clone()).take(take).collect();
+    log::debug!("{:?}", station_names);
+    format!("Found {} stations. {:?} ", stations.len(), station_names,)
 }
 
-type AsyncError = Box<dyn std::error::Error + Send + Sync + 'static>;
-
-async fn find_near_stations(location: &Location) -> Result<Vec<Station>, AsyncError> {
+async fn find_near_stations(location: &Location) -> Result<Vec<Station>, Exception> {
     let user_location = geoutils::Location::new(location.latitude, location.longitude);
-    log::info!("pedro");
     let mut networks = bike_service::fetch_networks().await?;
     log::info!("{:?}", networks.len());
     networks.sort_by_key(|network| {

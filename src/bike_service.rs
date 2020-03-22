@@ -61,7 +61,7 @@ impl Network {
             .recv_json()
             .await?;
         let Network { stations, .. } = network;
-        let stations = stations.unwrap_or(vec![]);
+        let stations = stations.unwrap_or_else(|| vec![]);
         Ok(stations)
     }
 }
@@ -100,7 +100,7 @@ mod test {
         let networks = fetch_networks().await.unwrap();
         for network in networks {
             let href = network.href.as_ref().unwrap();
-            println!("{}", href);
+            // Not the best solution to await in a for loop
             let result = network.stations().await;
             if result.is_err() {
                 println!("Failed on this href: '{}'", result.as_ref().err().unwrap());
