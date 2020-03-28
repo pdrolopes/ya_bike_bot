@@ -11,9 +11,11 @@ use teloxide::requests::SendChatActionKind;
 use teloxide::types::{Location, ParseMode};
 use teloxide::utils::markdown::{escape, italic, link};
 use tokio;
+use url::Url;
 const SMALL_BIKE_AMOUNT: u32 = 6;
 const STATION_MAX_TAKE: usize = 5;
 const STATION_MIN_TAKE: usize = 3;
+const GOOGLE_MAPS_URL: &str = "https://www.google.com/maps";
 
 #[tokio::main]
 async fn main() {
@@ -86,11 +88,10 @@ async fn build_near_stations_message(location: &Location) -> Vec<String> {
 
 impl Station {
     fn message(&self) -> String {
-        let url = format!(
-            "https://www.google.com/maps?q={},{}",
-            &self.latitude, &self.longitude
-        );
-        let name = link(&url, &self.name);
+        let mut url = Url::parse(GOOGLE_MAPS_URL).unwrap();
+        url.query_pairs_mut()
+            .append_pair("q", &format!("{},{}", &self.latitude, &self.longitude));
+        let name = link(url.as_str(), &self.name);
         let free_bikes = &self
             .free_bikes
             .map_or(String::from("??"), |num| num.to_string());
