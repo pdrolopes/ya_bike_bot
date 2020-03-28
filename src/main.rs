@@ -1,5 +1,6 @@
 use dotenv;
 mod bike_service;
+mod error;
 use bike_service::{Geo, Station};
 use geoutils;
 use std::env;
@@ -7,7 +8,7 @@ use std::f64::INFINITY;
 use surf::Exception;
 use teloxide::prelude::*;
 use teloxide::requests::SendChatActionKind;
-use teloxide::types::{Location, MediaKind, MessageKind, ParseMode};
+use teloxide::types::{Location, ParseMode};
 use teloxide::utils::markdown::{escape, italic, link};
 use tokio;
 const SMALL_BIKE_AMOUNT: u32 = 6;

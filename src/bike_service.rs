@@ -1,3 +1,4 @@
+use crate::error::InvalidBikeNetwork;
 use serde::{Deserialize, Serialize};
 use surf::Exception;
 const CITYBIKES_HOST: &str = "http://api.citybik.es";
@@ -55,11 +56,11 @@ impl Network {
             network: Network,
         }
         let Network { href, name, .. } = self;
-        if href.is_none() {
-            log::info!("Network name:'{}' has no href", name);
-            return Ok(vec![]);
-        }
-        let href = href.as_ref().unwrap();
+        let href = if let Some(href) = href {
+            href
+        } else {
+            return Err(Box::new(InvalidBikeNetwork::new(name.to_string())));
+        };
         let Response { network } = surf::get(CITYBIKES_HOST.to_string() + href)
             .recv_json()
             .await?;
