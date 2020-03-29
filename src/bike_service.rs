@@ -43,7 +43,7 @@ pub async fn fetch_networks() -> Result<Vec<Network>, Exception> {
     struct Response {
         networks: Vec<Network>,
     }
-    let Response { networks } = surf::get(CITYBIKES_HOST.to_owned() + NETWORKS_HREF)
+    let Response { networks } = surf::get(format!("{}{}", CITYBIKES_HOST, NETWORKS_HREF))
         .recv_json()
         .await?;
     Ok(networks)
@@ -61,7 +61,7 @@ impl Network {
         } else {
             return Err(Box::new(InvalidBikeNetwork::new(name.to_string())));
         };
-        let Response { network } = surf::get(CITYBIKES_HOST.to_string() + href)
+        let Response { network } = surf::get(format!("{}{}", CITYBIKES_HOST, href))
             .recv_json()
             .await?;
         let Network { stations, .. } = network;
