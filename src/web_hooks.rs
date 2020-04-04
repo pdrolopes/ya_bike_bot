@@ -51,7 +51,7 @@ pub async fn webhook<'a>(
 
     let serve = warp::serve(server);
 
-    tokio::spawn(serve.run(([127, 0, 0, 1], 3000)));
+    tokio::spawn(serve.run(([0, 0, 0, 0], 3000)));
     log::info!("Running on localhost:3000");
     rx
 }
