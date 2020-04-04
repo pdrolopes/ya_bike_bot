@@ -1,7 +1,7 @@
 use teloxide::{dispatching::update_listeners, prelude::*};
 
 use reqwest::StatusCode;
-use std::{convert::Infallible, net::SocketAddr, sync::Arc};
+use std::{convert::Infallible, sync::Arc};
 use tokio::sync::mpsc;
 use warp::Filter;
 
@@ -51,6 +51,7 @@ pub async fn webhook<'a>(
 
     let serve = warp::serve(server);
 
-    tokio::spawn(serve.run("127.0.0.1:80".parse::<SocketAddr>().unwrap()));
+    tokio::spawn(serve.run(([127, 0, 0, 1], 3000)));
+    log::info!("Running on localhost:3000");
     rx
 }
