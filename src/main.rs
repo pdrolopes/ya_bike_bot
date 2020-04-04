@@ -1,6 +1,7 @@
 use dotenv;
 mod bike_service;
 mod error;
+mod web_hooks;
 use bike_service::{Geo, Station};
 use geoutils;
 use std::env;
@@ -27,11 +28,14 @@ async fn run() {
     teloxide::enable_logging!();
     log::info!("Starting Yet Another Bike Bot");
     let token = env::var("TOKEN").expect("Missing TOKEN env");
+    let host = env::var("HOST").expect("Missing HOST env");
+    let poll = env::var("POLL").unwrap_or("false".to_string());
+    let poll: bool = poll.parse().unwrap();
 
     let bot = Bot::new(token);
 
-    Dispatcher::new(bot)
-        .messages_handler(|rx: DispatcherHandlerRx<Message>| {
+    let dispatcher =
+        Dispatcher::new(bot.clone()).messages_handler(|rx: DispatcherHandlerRx<Message>| {
             rx.for_each(|context| async move {
                 let DispatcherHandlerCx { update, bot } = &context;
                 let send_action =
@@ -58,9 +62,17 @@ async fn run() {
                     send_message.send().await.log_on_error().await;
                 }
             })
-        })
-        .dispatch()
-        .await;
+        });
+    if poll {
+        dispatcher.dispatch().await;
+    } else {
+        dispatcher
+            .dispatch_with_listener(
+                web_hooks::webhook(bot.clone(), &host).await,
+                LoggingErrorHandler::with_custom_text("An error from the update listener"),
+            )
+            .await
+    };
 }
 async fn build_near_stations_message(location: &Location) -> Vec<String> {
     let stations = match find_near_stations(location).await {
