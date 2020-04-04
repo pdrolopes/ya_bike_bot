@@ -9,7 +9,7 @@ All information is gather from the awesome [CityBikes](https://citybik.es/#about
 # TODO LIST
 
 * Create auto deploy
-* Webhook
+* Run on Heroku?
 * Translate
 * Organize to be more rusty like
 * Add warn button on empty stations message so that user can get notified in case the stations has any new bikes
