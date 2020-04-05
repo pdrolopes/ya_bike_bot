@@ -13,7 +13,7 @@ async fn handle_rejection(error: warp::Rejection) -> Result<impl warp::Reply, In
 pub async fn webhook<'a>(
     bot: Arc<Bot>,
     host: &str,
-    port: &u32,
+    port: u16,
 ) -> impl update_listeners::UpdateListener<Infallible> {
     let token = bot.token();
     let path = format!("bot{}", token);

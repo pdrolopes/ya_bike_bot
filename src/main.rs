@@ -33,7 +33,7 @@ async fn run() {
         .unwrap_or("false".to_string())
         .parse()
         .expect("non boolean value");
-    let port: u32 = env::var("PORT")
+    let port: u16 = env::var("PORT")
         .unwrap_or("3000".to_string())
         .parse()
         .expect("non interger value");
@@ -74,7 +74,7 @@ async fn run() {
     } else {
         dispatcher
             .dispatch_with_listener(
-                web_hooks::webhook(bot.clone(), &host, &port).await,
+                web_hooks::webhook(bot.clone(), &host, port).await,
                 LoggingErrorHandler::with_custom_text("An error from the update listener"),
             )
             .await
