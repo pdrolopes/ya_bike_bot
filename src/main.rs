@@ -29,8 +29,14 @@ async fn run() {
     log::info!("Starting Yet Another Bike Bot");
     let token = env::var("TOKEN").expect("Missing TOKEN env");
     let host = env::var("HOST").expect("Missing HOST env");
-    let poll = env::var("POLL").unwrap_or("false".to_string());
-    let poll: bool = poll.parse().unwrap();
+    let poll: bool = env::var("POLL")
+        .unwrap_or("false".to_string())
+        .parse()
+        .expect("non boolean value");
+    let port: u32 = env::var("PORT")
+        .unwrap_or("3000".to_string())
+        .parse()
+        .expect("non interger value");
 
     let bot = Bot::new(token);
 
@@ -68,7 +74,7 @@ async fn run() {
     } else {
         dispatcher
             .dispatch_with_listener(
-                web_hooks::webhook(bot.clone(), &host).await,
+                web_hooks::webhook(bot.clone(), &host, &port).await,
                 LoggingErrorHandler::with_custom_text("An error from the update listener"),
             )
             .await
