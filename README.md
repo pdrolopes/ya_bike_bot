@@ -8,6 +8,8 @@ All information is gather from the awesome [CityBikes](https://citybik.es/#about
 
 # TODO LIST
 
-* Translate:
+* Add start/about message
 * Organize to be more rusty like
+* Show walking distance and time to stations.
+* Translate
 * Add warn button on empty stations message so that user can get notified in case the stations has any new bikes
