@@ -31,7 +31,7 @@ async fn run() {
 
     let dispatcher =
         Dispatcher::new(bot.clone()).messages_handler(|rx: DispatcherHandlerRx<Message>| {
-            rx.for_each(|context| async move {
+            rx.for_each_concurrent(None, |context| async move {
                 let DispatcherHandlerCx { update, bot } = &context;
 
                 //Send action that shows "Typing..."
