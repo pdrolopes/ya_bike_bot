@@ -1,10 +1,11 @@
 use dotenv;
 mod bike_service;
+mod config;
 mod error;
 mod web_hooks;
 use bike_service::{Geo, Station};
+use config::Config;
 use geoutils;
-use std::env;
 use std::f64::INFINITY;
 use surf::Exception;
 use teloxide::prelude::*;
@@ -27,18 +28,14 @@ async fn main() {
 async fn run() {
     teloxide::enable_logging!();
     log::info!("Starting Yet Another Bike Bot");
-    let token = env::var("TOKEN").expect("Missing TOKEN env");
-    let host = env::var("HOST").expect("Missing HOST env");
-    let poll: bool = env::var("POLL")
-        .unwrap_or_else(|_| "false".to_string())
-        .parse()
-        .expect("non boolean value");
-    let port: u16 = env::var("PORT")
-        .unwrap_or_else(|_| "3000".to_string())
-        .parse()
-        .expect("non interger value");
 
-    let bot = Bot::new(token);
+    let Config {
+        telegram_token,
+        host,
+        port,
+        poll,
+    } = Config::new();
+    let bot = Bot::new(telegram_token);
 
     let dispatcher =
         Dispatcher::new(bot.clone()).messages_handler(|rx: DispatcherHandlerRx<Message>| {
