@@ -10,7 +10,7 @@ use std::f64::INFINITY;
 use surf::Exception;
 use teloxide::prelude::*;
 use teloxide::requests::SendChatActionKind;
-use teloxide::types::{Location, ParseMode};
+use teloxide::types::{ButtonRequest, KeyboardButton, Location, ParseMode, ReplyKeyboardMarkup};
 use teloxide::utils::markdown::{escape, italic, link};
 use tokio;
 use url::Url;
@@ -44,6 +44,18 @@ async fn run() {
                 let send_action =
                     bot.send_chat_action(update.chat_id(), SendChatActionKind::Typing);
                 tokio::spawn(async move { send_action.send().await });
+                let message_text = update.text_owned().unwrap_or_default();
+
+                // Handle commands
+                if message_text.starts_with("/start") {
+                    handle_start(&context).await;
+                    return;
+                } else if message_text.starts_with("/about") {
+                    handle_about(&context).await;
+                    return;
+                }
+
+                // Log user
                 if let Some(user) = update.from() {
                     let mention = user.mention().unwrap_or_default();
                     log::info!("Location sent by: {}, {} ", user.full_name(), mention);
@@ -77,6 +89,39 @@ async fn run() {
             .await
     };
 }
+
+async fn handle_start(context: &DispatcherHandlerCx<Message>) {
+    let location_button = KeyboardButton::new("Send location").request(ButtonRequest::Location);
+    let keyboard = ReplyKeyboardMarkup::default()
+        .resize_keyboard(true)
+        .append_row(vec![location_button]);
+    context
+        .answer("Send me a Location so I can send you information from near bike stations")
+        .parse_mode(ParseMode::MarkdownV2)
+        .reply_markup(keyboard)
+        .send()
+        .await
+        .log_on_error()
+        .await;
+}
+
+async fn handle_about(context: &DispatcherHandlerCx<Message>) {
+    let message = "
+Created by [Pedro Lopes](https://t.me/pdrolopes)
+Code is available on [Github](https://github.com/pdrolopes/ya_bike_bot)
+
+Information from the bike stations are fetched from [CityBikes](https://citybik.es/)\\.
+This Bot was made with [Teloxide](https://github.com/teloxide/teloxide) library
+    ";
+    context
+        .answer(message)
+        .parse_mode(ParseMode::MarkdownV2)
+        .send()
+        .await
+        .log_on_error()
+        .await;
+}
+
 async fn build_near_stations_message(location: &Location) -> Vec<String> {
     let stations = match find_near_stations(location).await {
         Ok(stations) => stations,
