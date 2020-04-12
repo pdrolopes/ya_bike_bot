@@ -1,5 +1,5 @@
 use crate::bike_service;
-use crate::bike_service::{Geo, Station};
+use bike_service::{Geo, Station};
 use teloxide::prelude::*;
 use teloxide::utils::markdown::{escape, italic, link};
 const SMALL_BIKE_AMOUNT: u32 = 6;
@@ -22,30 +22,25 @@ pub async fn handle(context: &DispatcherHandlerCx<Message>) {
     } else {
         return;
     };
-    let messages = build_near_stations_message(location).await;
-    let send_messages = messages.iter().map(|m| {
-        context
-            .answer(m)
-            .parse_mode(ParseMode::MarkdownV2)
-            .disable_web_page_preview(true)
-            .disable_notification(true)
-    });
-    for send_message in send_messages {
-        send_message.send().await.log_on_error().await;
-    }
-}
 
-async fn build_near_stations_message(location: &Location) -> Vec<String> {
     let stations = match find_near_stations(location).await {
         Ok(stations) => stations,
         Err(err) => {
             log::error!("Error fetching stations {:?}", err);
-            return vec![String::from("No stations found.")];
+            context
+                .answer("There was a problem to list stations")
+                .send()
+                .await
+                .log_on_error()
+                .await;
+            return;
         }
     };
+
+    // Calculate take value, to see if we iter 3 or 5 stations
     let is_small_amount: bool = stations
         .iter()
-        .take(SMALL_BIKE_AMOUNT as usize)
+        .take(STATION_MIN_TAKE as usize)
         .map(|s| s.free_bikes.unwrap_or_default()) // defaults to 0
         .sum::<u32>()
         <= SMALL_BIKE_AMOUNT;
@@ -54,9 +49,23 @@ async fn build_near_stations_message(location: &Location) -> Vec<String> {
     } else {
         STATION_MIN_TAKE
     };
-    let station_messages = stations.iter().take(take).map(|s| s.message()).collect();
-    log::debug!("{:?}", station_messages);
-    station_messages
+
+    let send_messages = stations.iter().take(take).map(|station| {
+        log::debug!("{:?}", station);
+        let send_message = context
+            .answer(station.message())
+            .parse_mode(ParseMode::MarkdownV2)
+            .disable_web_page_preview(true)
+            .disable_notification(true);
+        if let Some(reply_markup) = station.reply_markup() {
+            send_message.reply_markup(reply_markup)
+        } else {
+            send_message
+        }
+    });
+    for send_message in send_messages {
+        send_message.send().await.log_on_error().await;
+    }
 }
 
 impl Station {

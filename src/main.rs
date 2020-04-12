@@ -3,6 +3,7 @@ pub mod bike_service;
 mod config;
 mod error;
 mod handle_location;
+pub mod station_low_warn;
 mod web_hooks;
 use config::Config;
 use handle_location::handle as handle_location;
