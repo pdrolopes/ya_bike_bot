@@ -8,7 +8,6 @@ All information is gather from the awesome [CityBikes](https://citybik.es/#about
 
 # TODO LIST
 
-* Add start/about message
 * Organize to be more rusty like
 * Show walking distance and time to stations.
 * Translate

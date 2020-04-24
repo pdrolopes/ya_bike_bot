@@ -23,12 +23,15 @@ pub struct Network {
 pub struct Station {
     pub free_bikes: Option<u32>,
     pub empty_slots: Option<u32>,
-    id: String,
+    pub id: String,
     pub latitude: f64,
     pub longitude: f64,
     pub name: String,
     timestamp: String, //TODO see how to manipulate dates
     pub extra: Option<Extra>,
+
+    #[serde(default)]
+    pub network_href: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -65,7 +68,11 @@ impl Network {
             .recv_json()
             .await?;
         let Network { stations, .. } = network;
-        let stations = stations.unwrap_or_else(|| vec![]);
+        let mut stations = stations.unwrap_or_else(|| vec![]);
+        stations.iter_mut().for_each(|station| {
+            station.network_href = Some(href.into());
+        });
+
         Ok(stations)
     }
 }

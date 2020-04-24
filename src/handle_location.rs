@@ -1,12 +1,15 @@
 use crate::bike_service;
 use bike_service::{Geo, Station};
-use teloxide::prelude::*;
+use teloxide::dispatching::DispatcherHandlerCx;
+use teloxide::error_handlers::OnError;
+use teloxide::requests::Request;
+use teloxide::types::Message;
 use teloxide::utils::markdown::{escape, italic, link};
 const SMALL_BIKE_AMOUNT: u32 = 6;
 const STATION_MAX_TAKE: usize = 5;
 const STATION_MIN_TAKE: usize = 3;
 const GOOGLE_MAPS_URL: &str = "https://www.google.com/maps";
-use geoutils;
+use crate::station_low_warn::reply_markups;
 use std::f64::INFINITY;
 use surf::Exception;
 use teloxide::types::{Location, ParseMode};
@@ -49,20 +52,26 @@ pub async fn handle(context: &DispatcherHandlerCx<Message>) {
     } else {
         STATION_MIN_TAKE
     };
+    let stations: Vec<Station> = stations.into_iter().take(take).collect();
+    let reply_markups = reply_markups(&stations).await;
 
-    let send_messages = stations.iter().take(take).map(|station| {
-        log::debug!("{:?}", station);
-        let send_message = context
-            .answer(station.message())
-            .parse_mode(ParseMode::MarkdownV2)
-            .disable_web_page_preview(true)
-            .disable_notification(true);
-        if let Some(reply_markup) = station.reply_markup() {
-            send_message.reply_markup(reply_markup)
-        } else {
-            send_message
-        }
-    });
+    let send_messages =
+        stations
+            .iter()
+            .zip(reply_markups.into_iter())
+            .map(|(station, reply_markup)| {
+                log::debug!("{:?}", station);
+                let send_message = context
+                    .answer(station.message())
+                    .parse_mode(ParseMode::MarkdownV2)
+                    .disable_web_page_preview(true)
+                    .disable_notification(true);
+                if let Some(rm) = reply_markup {
+                    send_message.reply_markup(rm)
+                } else {
+                    send_message
+                }
+            });
     for send_message in send_messages {
         send_message.send().await.log_on_error().await;
     }

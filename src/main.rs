@@ -1,7 +1,7 @@
-use dotenv;
 pub mod bike_service;
 mod config;
 mod error;
+mod handle_callback_query;
 mod handle_location;
 pub mod station_low_warn;
 mod web_hooks;
@@ -9,8 +9,9 @@ use config::Config;
 use handle_location::handle as handle_location;
 use teloxide::prelude::*;
 use teloxide::requests::SendChatActionKind;
-use teloxide::types::{ButtonRequest, KeyboardButton, ParseMode, ReplyKeyboardMarkup};
-use tokio;
+use teloxide::types::{
+    ButtonRequest, CallbackQuery, KeyboardButton, ParseMode, ReplyKeyboardMarkup,
+};
 
 #[tokio::main]
 async fn main() {
@@ -30,8 +31,8 @@ async fn run() {
     } = Config::new();
     let bot = Bot::new(telegram_token);
 
-    let dispatcher =
-        Dispatcher::new(bot.clone()).messages_handler(|rx: DispatcherHandlerRx<Message>| {
+    let dispatcher = Dispatcher::new(bot.clone())
+        .messages_handler(|rx: DispatcherHandlerRx<Message>| {
             rx.for_each_concurrent(None, |context| async move {
                 let DispatcherHandlerCx { update, bot } = &context;
 
@@ -60,6 +61,11 @@ async fn run() {
                 } else {
                     handle_start(&context).await;
                 }
+            })
+        })
+        .callback_queries_handler(|rx: DispatcherHandlerRx<CallbackQuery>| {
+            rx.for_each_concurrent(None, |context| async move {
+                handle_callback_query::handle(&context).await;
             })
         });
     if poll {
