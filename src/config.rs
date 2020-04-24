@@ -4,6 +4,7 @@ pub struct Config {
     pub poll: bool,
     pub host: String,
     pub port: u16,
+    pub redis_url: String,
 }
 
 impl Config {
@@ -18,11 +19,13 @@ impl Config {
             .unwrap_or_else(|_| "3000".to_string())
             .parse()
             .expect("non interger value");
+        let redis_url: String = env::var("REDIS_URL").expect("Missing REDIS_URL env");
         Config {
             telegram_token: token,
             poll,
             host,
             port,
+            redis_url,
         }
     }
 }

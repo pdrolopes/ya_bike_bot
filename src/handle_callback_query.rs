@@ -17,7 +17,7 @@ pub async fn handle(context: &DispatcherHandlerCx<CallbackQuery>) {
         Some(m) => m,
         None => return,
     };
-    let client = redis::Client::open("redis://127.0.0.1/").unwrap(); // TODO set redis addres to env variable
+    let client = redis::Client::open(crate::config::Config::new().redis_url).unwrap(); // TODO set redis addres to env variable
     let mut con = client.get_async_connection().await.unwrap();
     let data: String = redis::AsyncCommands::get(&mut con, uuid_data)
         .await

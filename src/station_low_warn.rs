@@ -45,7 +45,7 @@ impl From<&Station> for StationWarn {
 }
 
 pub async fn reply_markups(stations: &[Station]) -> Vec<Option<InlineKeyboardMarkup>> {
-    let client = redis::Client::open("redis://127.0.0.1/").unwrap(); // TODO set redis addres to env variable
+    let client = redis::Client::open(crate::config::Config::new().redis_url).unwrap(); // TODO set redis addres to env variable
     let mut con = client.get_async_connection().await.unwrap();
     let uuids: Vec<String> = stations
         .iter()

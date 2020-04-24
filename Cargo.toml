@@ -11,7 +11,7 @@ description = "Yet another telegram bot that delivers shared bike information. D
 dotenv= "0.15.0"
 teloxide = "0.2.0"
 log = "0.4.8"
-tokio = "0.2.11"
+tokio = { version =  "0.2.11", features = ["time"] }
 pretty_env_logger = "0.4.0"
 surf = "1.0.3"
 serde = "1.0.105"

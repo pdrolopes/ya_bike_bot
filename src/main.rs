@@ -7,6 +7,7 @@ pub mod station_low_warn;
 mod web_hooks;
 use config::Config;
 use handle_location::handle as handle_location;
+use std::time::Duration;
 use teloxide::prelude::*;
 use teloxide::requests::SendChatActionKind;
 use teloxide::types::{
@@ -16,6 +17,7 @@ use teloxide::types::{
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().ok();
+    start_station_warn_loop();
     run().await;
 }
 
@@ -28,6 +30,7 @@ async fn run() {
         host,
         port,
         poll,
+        ..
     } = Config::new();
     let bot = Bot::new(telegram_token);
 
@@ -110,4 +113,22 @@ This Bot was made with [Teloxide](https://github.com/teloxide/teloxide) library
         .await
         .log_on_error()
         .await;
+}
+
+// TODO name this better
+fn start_station_warn_loop() {
+    dbg!("Started loop");
+    tokio::spawn(async {
+        loop {
+            // TODO Moved redis to a centrlized place.
+            let client = redis::Client::open(Config::new().redis_url).unwrap(); // TODO set redis addres to env variable
+            let mut con = client.get_async_connection().await.unwrap();
+            let keys: Vec<String> = redis::AsyncCommands::keys(&mut con, "ACTIVE*")
+                .await
+                .unwrap();
+            dbg!(keys);
+
+            tokio::time::delay_for(Duration::new(60, 0)).await
+        }
+    });
 }
