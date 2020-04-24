@@ -25,14 +25,8 @@ async fn run() {
     teloxide::enable_logging!();
     log::info!("Starting Yet Another Bike Bot");
 
-    let Config {
-        telegram_token,
-        host,
-        port,
-        poll,
-        ..
-    } = Config::new();
-    let bot = Bot::new(telegram_token);
+    let config = Config::new();
+    let bot = Bot::new(config.telegram_token);
 
     let dispatcher = Dispatcher::new(bot.clone())
         .messages_handler(|rx: DispatcherHandlerRx<Message>| {
@@ -71,12 +65,12 @@ async fn run() {
                 handle_callback_query::handle(&context).await;
             })
         });
-    if poll {
+    if config.poll {
         dispatcher.dispatch().await;
     } else {
         dispatcher
             .dispatch_with_listener(
-                web_hooks::webhook(bot.clone(), &host, port).await,
+                web_hooks::webhook(bot.clone(), &config.host, config.port).await,
                 LoggingErrorHandler::with_custom_text("An error from the update listener"),
             )
             .await

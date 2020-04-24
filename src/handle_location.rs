@@ -82,19 +82,21 @@ impl Station {
         let mut url = Url::parse(GOOGLE_MAPS_URL).unwrap();
         url.query_pairs_mut()
             .append_pair("q", &format!("{},{}", &self.latitude, &self.longitude));
-        let name = link(url.as_str(), &self.name);
-        let free_bikes = &self
+        let name = link(url.as_str(), &escape(&self.name));
+        let free_bikes = self
             .free_bikes
             .map_or(String::from("??"), |num| num.to_string());
-        let empty_slots = &self
+        let empty_slots = self
             .empty_slots
             .map_or(String::from("??"), |num| num.to_string());
         let description = self
             .extra
             .as_ref()
-            .and_then(|extra| extra.description.clone())
-            .unwrap_or_else(String::new);
+            .and_then(|extra| extra.description.as_ref().or(extra.address.as_ref()))
+            .map(|value| value.clone())
+            .unwrap_or_default();
         let description = italic(&escape(&description));
+        dbg!(&description);
         format!(
             "`Station   :` {}
 `Bikes     :` {}
