@@ -116,6 +116,7 @@ async fn find_near_stations(location: &Location) -> Result<Vec<Station>, Excepti
             .unwrap_or_else(|_| geoutils::Distance::from_meters(INFINITY))
             .meters() as u32
     });
+    dbg!(&networks[0]);
     let mut stations = if let Some(network) = networks.first() {
         log::debug!("Closest bike network, {}", network.name);
         network.stations().await?

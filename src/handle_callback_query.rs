@@ -25,6 +25,7 @@ pub async fn handle(context: &DispatcherHandlerCx<CallbackQuery>) {
     let mut data: StationWarn = serde_json::from_str(&data).unwrap();
     data.message_id = Some(message.id);
     data.updated_at = Utc::now();
+    data.chat_id = Some(message.chat.id);
     let data = serde_json::to_string(&data).unwrap();
     con.set_ex::<_, _, ()>(
         format!("{}:{}", ACTIVE_STATIONS_WARN, uuid_data),

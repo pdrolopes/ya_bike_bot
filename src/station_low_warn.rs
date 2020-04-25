@@ -1,8 +1,11 @@
 // TODO think of a better name
 use crate::bike_service::Station;
+use crate::config::Config;
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::convert::From;
+use std::sync::Arc;
+use teloxide::prelude::*;
 use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
 use uuid::Uuid;
 const LOW_PERCENTAGE_BIKES: f32 = 0.2; // 20%
@@ -27,6 +30,7 @@ pub struct StationWarn {
     id: String,
     pub message_id: Option<i32>,
     pub updated_at: DateTime<Utc>,
+    pub chat_id: Option<i64>,
 }
 
 impl From<&Station> for StationWarn {
@@ -39,6 +43,7 @@ impl From<&Station> for StationWarn {
             free_bikes,
             id,
             message_id: None,
+            chat_id: None,
             updated_at: Utc::now(),
         }
     }
@@ -74,4 +79,35 @@ pub async fn reply_markups(stations: &[Station]) -> Vec<Option<InlineKeyboardMar
     //     .await
     //     .unwrap();
     reply_markups
+}
+
+pub async fn check_active_warn_stations(bot: Arc<Bot>) {
+    let client = redis::Client::open(Config::new().redis_url).unwrap(); // TODO set redis addres to env variable
+    let mut con = client.get_async_connection().await.unwrap();
+    let keys: Vec<String> = redis::AsyncCommands::keys(&mut con, "ACTIVE*")
+        .await
+        .unwrap();
+    dbg!(&keys);
+    let pipeline = redis::Pipeline::new();
+    let data: Vec<String> = keys
+        .iter()
+        .fold(pipeline, |mut pipe, key| pipe.get(key).to_owned())
+        .atomic()
+        .query_async(&mut con)
+        .await
+        .unwrap();
+    let data: Vec<StationWarn> = data
+        .into_iter()
+        .map(|d| serde_json::from_str(&d).unwrap())
+        .collect();
+    for d in data.iter() {
+        let chat_id = d.chat_id.unwrap();
+        let message_id = d.message_id.unwrap();
+        bot.send_message(chat_id, "Test message")
+            .reply_to_message_id(message_id)
+            .send()
+            .await
+            .log_on_error()
+            .await;
+    }
 }
