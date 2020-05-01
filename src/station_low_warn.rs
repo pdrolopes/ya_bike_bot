@@ -16,19 +16,7 @@ use teloxide::utils::markdown::{bold, escape};
 use uuid::Uuid;
 const LOW_PERCENTAGE_BIKES: f32 = 0.8; // 20%
 const WARN_INTERVAL_TIME: i64 = (60 * 5) - 5; // ~= 5 minutes
-
-fn reply_markup(station: &Station, uuid: &str) -> Option<InlineKeyboardMarkup> {
-    let free_bikes = station.free_bikes? as f32;
-    let empty_slots = station.empty_slots? as f32;
-    let show_warn = (free_bikes / (free_bikes + empty_slots)) <= LOW_PERCENTAGE_BIKES;
-
-    if !show_warn {
-        return None;
-    };
-
-    let button = InlineKeyboardButton::callback("Alert!".to_string(), uuid.into());
-    Some(InlineKeyboardMarkup::default().append_row(vec![button]))
-}
+const INLINE_KEYBOARD_DATA_TTL: usize = 60 * 60 * 6; // 6 horas
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StationWarn {
@@ -59,29 +47,39 @@ impl From<&Station> for StationWarn {
     }
 }
 
-pub async fn reply_markups(stations: &[Station]) -> Vec<Option<InlineKeyboardMarkup>> {
+fn reply_markup(station: &Station, uuid: &str) -> Option<InlineKeyboardMarkup> {
+    let free_bikes = station.free_bikes? as f32;
+    let empty_slots = station.empty_slots? as f32;
+    let show_warn = (free_bikes / (free_bikes + empty_slots)) <= LOW_PERCENTAGE_BIKES;
+
+    if !show_warn {
+        return None;
+    };
+
+    let button = InlineKeyboardButton::callback("Alert!".to_string(), uuid.into());
+    Some(InlineKeyboardMarkup::default().append_row(vec![button]))
+}
+
+pub async fn reply_markups(
+    stations: &[Station],
+) -> Result<Vec<Option<InlineKeyboardMarkup>>, Exception> {
     let station_warns: Vec<StationWarn> = stations.iter().map(|station| station.into()).collect();
     let reply_markups: Vec<Option<InlineKeyboardMarkup>> = stations
         .iter()
         .zip(station_warns.iter())
         .map(|(station, warn)| reply_markup(station, &warn.uuid))
         .collect();
-    let mut new_pipeline = redis::Pipeline::new();
-    let pipeline_set: &mut redis::Pipeline =
-        station_warns
-            .iter()
-            .fold(&mut new_pipeline, |pipe, station_warn| {
-                let uuid = &station_warn.uuid;
-                let station_warn = serde_json::to_string(&station_warn).unwrap();
-                pipe.set(uuid, station_warn)
-                    .ignore()
-                    .expire(uuid, 60 * 60 * 12) // half day
-            });
+    let key_value: Vec<(String, String)> = station_warns
+        .iter()
+        .map(|station_warn| {
+            let uuid = &station_warn.uuid;
+            let station_warn = serde_json::to_string(&station_warn).unwrap_or_default();
+            (uuid.into(), station_warn)
+        })
+        .collect();
+    redis_helper::set_multiple(&key_value, Some(INLINE_KEYBOARD_DATA_TTL)).await?;
 
-    let client = redis::Client::open(crate::config::Config::new().redis_url).unwrap(); // TODO set redis addres to env variable
-    let mut con = client.get_async_connection().await.unwrap();
-    pipeline_set.query_async::<_, ()>(&mut con).await.unwrap();
-    reply_markups
+    Ok(reply_markups)
 }
 
 pub fn build_telegram_message(
@@ -165,7 +163,7 @@ pub async fn check_active_warn_stations(bot: Arc<Bot>) -> Result<(), Exception> 
             (key, data)
         })
         .collect();
-    redis_helper::set_multiple(&saves).await?;
+    redis_helper::set_multiple(&saves, None).await?;
 
     let send_messages: Vec<_> = send_messages
         .iter()
@@ -173,6 +171,10 @@ pub async fn check_active_warn_stations(bot: Arc<Bot>) -> Result<(), Exception> 
         .collect();
 
     log::debug!("{} messages to be sent", &send_messages.len());
-    join_all(send_messages).await;
+    let results: Vec<_> = join_all(send_messages).await;
+    results
+        .iter()
+        .filter_map(|r| r.as_ref().err())
+        .for_each(|err| log::error!("Error sending message {:?}", err));
     Ok(())
 }
