@@ -93,13 +93,13 @@ pub fn build_telegram_message(
     let free_bikes_diff = updated_station_free_bikes as i32 - station_warn.free_bikes as i32;
     let message = match free_bikes_diff {
         i32::MIN..=-1 => format!(
-            "💔 `Station: {}` has lost {} bikes",
+            "💔 `{}` has lost {} bikes",
             escape(&updated_station.name),
             bold(&free_bikes_diff.abs().to_string())
         ),
         0 => return None,
         1..=i32::MAX => format!(
-            "💚 {} has appeard on `Station: {}`!!! It now has {} bikes.",
+            "💚 {} has appeard on `{}`!!! It now has {} bikes.",
             bold(&free_bikes_diff.to_string()),
             escape(&updated_station.name),
             bold(&updated_station_free_bikes.to_string())
