@@ -7,7 +7,6 @@ use teloxide::dispatching::DispatcherHandlerCx;
 use teloxide::prelude::*;
 use teloxide::requests::Request;
 use teloxide::types::{CallbackQuery, ChatId, ChatOrInlineMessage};
-pub const WARN_STATION_TTL: usize = 60 * 30; // 30 minutes
 
 pub async fn handle(context: &DispatcherHandlerCx<CallbackQuery>) {
     let DispatcherHandlerCx { update, bot } = &context;
@@ -46,7 +45,7 @@ async fn create_station_warn(callback_query: &CallbackQuery, bot: Arc<Bot>) -> R
 
     let key = data.id();
     let data = serde_json::to_string(&data)?;
-    redis_helper::set_multiple(&vec![(key, data)], Some(WARN_STATION_TTL)).await?;
+    redis_helper::set_multiple(&vec![(key, data)], None).await?;
 
     bot.edit_message_reply_markup(ChatOrInlineMessage::Chat {
         chat_id: ChatId::Id(message.chat.id),

@@ -17,6 +17,7 @@ const LOW_PERCENTAGE_BIKES: f32 = 0.8; // 20%
 const WARN_INTERVAL_TIME: i64 = (60 * 5) - 5; // ~= 5 minutes
 const INLINE_KEYBOARD_DATA_TTL: usize = 60 * 60 * 6; // 6 horas
 const ACTIVE_STATIONS_WARN: &str = "ACTIVE_STATIONS_WARN";
+pub const STATION_WARN_TTL: i64 = 60 * 30; // 30 minutes
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StationWarn {
@@ -25,12 +26,23 @@ pub struct StationWarn {
     free_bikes: u32,
     id: String,
     pub message_id: Option<i32>,
+    pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub chat_id: Option<i64>,
 }
 impl StationWarn {
     pub fn id(&self) -> String {
         format!("{}:{}", ACTIVE_STATIONS_WARN, self.uuid)
+    }
+
+    pub fn should_warn(&self) -> bool {
+        let now = Utc::now();
+        now.timestamp() - self.updated_at.timestamp() > WARN_INTERVAL_TIME
+    }
+
+    pub fn should_delete(&self) -> bool {
+        let now = Utc::now();
+        now.timestamp() - self.created_at.timestamp() > STATION_WARN_TTL
     }
 }
 
@@ -48,6 +60,7 @@ impl From<&Station> for StationWarn {
             message_id: None,
             chat_id: None,
             updated_at: Utc::now(),
+            created_at: Utc::now(),
         }
     }
 }
@@ -122,12 +135,20 @@ pub fn build_telegram_message(
 pub async fn check_active_warn_stations(bot: Arc<Bot>) -> Result<(), Exception> {
     let keys = redis_helper::keys(Some(&format!("{}*", ACTIVE_STATIONS_WARN))).await?;
     log::info!("Found {} station messages to be warned", &keys.len());
-    let data = redis_helper::get_multiple(&keys).await?;
-    let now = Utc::now();
-    let mut stations_to_be_warned: Vec<StationWarn> = data
+    let (old_station_warns, active_station_warns): (Vec<_>, Vec<_>) =
+        redis_helper::get_multiple(&keys)
+            .await?
+            .into_iter()
+            .filter_map(|data| serde_json::from_str(&data).ok())
+            .partition(StationWarn::should_delete);
+    // Delte old station warns that have passed their ttl
+    let old_station_warns_keys: Vec<_> =
+        old_station_warns.into_iter().map(|osw| osw.id()).collect();
+    redis_helper::del_multiple(&old_station_warns_keys).await?;
+
+    let mut stations_to_be_warned: Vec<StationWarn> = active_station_warns
         .into_iter()
-        .filter_map(|data| serde_json::from_str(&data).ok())
-        .filter(|d: &StationWarn| now.timestamp() - d.updated_at.timestamp() > WARN_INTERVAL_TIME)
+        .filter(StationWarn::should_warn)
         .collect();
     log::info!(
         "{} StationWarn are older than 5 minutes",
@@ -152,7 +173,7 @@ pub async fn check_active_warn_stations(bot: Arc<Bot>) -> Result<(), Exception> 
         .map(|(station_warn, updated_station)| {
             let send_message = build_telegram_message(station_warn, updated_station, bot.clone());
             // updated station warn info
-            station_warn.updated_at = now;
+            station_warn.updated_at = Utc::now();
             station_warn.free_bikes = updated_station.free_bikes.unwrap_or_default();
 
             send_message

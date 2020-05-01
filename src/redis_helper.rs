@@ -35,6 +35,17 @@ pub async fn set_multiple(tuples: &[(String, String)], expire: Option<usize>) ->
     pipeline.atomic().query_async(&mut connection).await?;
     Ok(())
 }
+
+pub async fn del_multiple(keys: &[String]) -> RedisResult<()> {
+    let mut connection = get_connection().await?;
+    let mut pipeline = redis::Pipeline::new();
+    keys.iter().for_each(|key| {
+        pipeline.del(key);
+    });
+    pipeline.atomic().query_async(&mut connection).await?;
+    Ok(())
+}
+
 pub async fn get_multiple(keys: &[String]) -> RedisResult<Vec<String>> {
     let mut connection = get_connection().await?;
     let mut pipeline = redis::Pipeline::new();
