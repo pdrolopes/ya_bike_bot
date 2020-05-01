@@ -11,5 +11,4 @@ All information is gather from the awesome [CityBikes](https://citybik.es/#about
 * Organize to be more rusty like
 * Show walking distance and time to stations.
 * Translate
-* Add warn button on empty stations message so that user can get notified in case the stations has any new bikes
 * Check message on different citys
