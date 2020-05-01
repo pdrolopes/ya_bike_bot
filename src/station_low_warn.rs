@@ -123,7 +123,7 @@ pub async fn check_active_warn_stations(bot: Arc<Bot>) -> Result<(), Exception> 
     let now = Utc::now();
     let mut stations_to_be_warned: Vec<StationWarn> = data
         .into_iter()
-        .map(|d| serde_json::from_str(&d).unwrap())
+        .filter_map(|data| serde_json::from_str(&data).ok())
         .filter(|d: &StationWarn| now.timestamp() - d.updated_at.timestamp() > WARN_INTERVAL_TIME)
         .collect();
     log::info!(
@@ -161,7 +161,7 @@ pub async fn check_active_warn_stations(bot: Arc<Bot>) -> Result<(), Exception> 
         .iter()
         .map(|station_warn| {
             let key = format!("{}:{}", ACTIVE_STATIONS_WARN, station_warn.uuid);
-            let data = serde_json::to_string(station_warn).unwrap();
+            let data = serde_json::to_string(station_warn).unwrap_or_default();
             (key, data)
         })
         .collect();
