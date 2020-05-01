@@ -13,7 +13,7 @@ use teloxide::types::ParseMode;
 use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
 use teloxide::utils::markdown::{bold, escape};
 use uuid::Uuid;
-const LOW_PERCENTAGE_BIKES: f32 = 0.8; // 20%
+const LOW_PERCENTAGE_BIKES: f32 = 0.2; // 20%
 const WARN_INTERVAL_TIME: i64 = (60 * 5) - 5; // ~= 5 minutes
 const INLINE_KEYBOARD_DATA_TTL: usize = 60 * 60 * 6; // 6 horas
 const ACTIVE_STATIONS_WARN: &str = "ACTIVE_STATIONS_WARN";
@@ -134,7 +134,7 @@ pub fn build_telegram_message(
 }
 pub async fn check_active_warn_stations(bot: Arc<Bot>) -> Result<(), Exception> {
     let keys = redis_helper::keys(Some(&format!("{}*", ACTIVE_STATIONS_WARN))).await?;
-    log::info!("Found {} station messages to be warned", &keys.len());
+    log::info!("Found {} station warns", &keys.len());
     let (old_station_warns, active_station_warns): (Vec<_>, Vec<_>) =
         redis_helper::get_multiple(&keys)
             .await?
