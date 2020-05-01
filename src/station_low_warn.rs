@@ -144,6 +144,7 @@ pub async fn check_active_warn_stations(bot: Arc<Bot>) -> Result<(), Exception> 
     // Delte old station warns that have passed their ttl
     let old_station_warns_keys: Vec<_> =
         old_station_warns.into_iter().map(|osw| osw.id()).collect();
+    log::debug!("Deleting StationWarn: {:?}", &old_station_warns_keys); // TODO remove this
     redis_helper::del_multiple(&old_station_warns_keys).await?;
 
     let mut stations_to_be_warned: Vec<StationWarn> = active_station_warns
