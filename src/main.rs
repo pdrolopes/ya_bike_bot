@@ -1,6 +1,5 @@
 pub mod bike_service;
 mod config;
-mod error;
 pub mod handle_callback_query;
 mod handle_location;
 pub mod redis_helper;
