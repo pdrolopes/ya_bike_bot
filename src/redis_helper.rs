@@ -17,6 +17,12 @@ pub async fn keys(pattern: Option<&str>) -> RedisResult<Vec<String>> {
     Ok(data)
 }
 
+pub async fn get(key: &str) -> RedisResult<String> {
+    let mut connection = get_connection().await?;
+    let data = connection.get(key).await?;
+    Ok(data)
+}
+
 pub async fn set_multiple(tuples: &[(String, String)], expire: Option<usize>) -> RedisResult<()> {
     let mut connection = get_connection().await?;
     let mut pipeline = redis::Pipeline::new();

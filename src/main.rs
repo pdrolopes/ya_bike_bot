@@ -64,6 +64,10 @@ async fn run() {
         })
         .callback_queries_handler(|rx: DispatcherHandlerRx<CallbackQuery>| {
             rx.for_each_concurrent(None, |context| async move {
+                let user = &context.update.from;
+                let mention = user.mention().unwrap_or_default();
+                log::info!("Callback query from: {}, {} ", user.full_name(), mention);
+
                 handle_callback_query::handle(&context).await;
             })
         });
@@ -118,7 +122,11 @@ fn start_station_warn_loop(bot: Arc<Bot>) {
         loop {
             let bot = bot.clone();
             // TODO Moved redis to a centrlized place.
-            station_low_warn::check_active_warn_stations(bot).await;
+            station_low_warn::check_active_warn_stations(bot)
+                .await
+                .unwrap_or_else(|err| {
+                    log::error!("While checking active station warns. {:?}", err)
+                });
             tokio::time::delay_for(Duration::new(60, 0)).await
         }
     });

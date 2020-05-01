@@ -1,6 +1,5 @@
 // TODO think of a better name
 use crate::bike_service::Station;
-use crate::handle_callback_query::ACTIVE_STATIONS_WARN;
 use crate::redis_helper;
 use chrono::prelude::*;
 use futures::future::join_all;
@@ -17,6 +16,7 @@ use uuid::Uuid;
 const LOW_PERCENTAGE_BIKES: f32 = 0.8; // 20%
 const WARN_INTERVAL_TIME: i64 = (60 * 5) - 5; // ~= 5 minutes
 const INLINE_KEYBOARD_DATA_TTL: usize = 60 * 60 * 6; // 6 horas
+const ACTIVE_STATIONS_WARN: &str = "ACTIVE_STATIONS_WARN";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StationWarn {
@@ -27,6 +27,11 @@ pub struct StationWarn {
     pub message_id: Option<i32>,
     pub updated_at: DateTime<Utc>,
     pub chat_id: Option<i64>,
+}
+impl StationWarn {
+    pub fn id(&self) -> String {
+        format!("{}:{}", ACTIVE_STATIONS_WARN, self.uuid)
+    }
 }
 
 impl From<&Station> for StationWarn {
