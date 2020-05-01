@@ -5,7 +5,7 @@ use teloxide::dispatching::DispatcherHandlerCx;
 use teloxide::error_handlers::OnError;
 use teloxide::requests::Request;
 use teloxide::types::{CallbackQuery, ChatId, ChatOrInlineMessage};
-const ACTIVE_STATIONS_WARN: &str = "ACTIVE_STATIONS_WARN";
+pub const ACTIVE_STATIONS_WARN: &str = "ACTIVE_STATIONS_WARN";
 
 pub async fn handle(context: &DispatcherHandlerCx<CallbackQuery>) {
     let DispatcherHandlerCx { update, bot } = &context;

@@ -8,6 +8,7 @@ pub struct Config {
 }
 
 impl Config {
+    // TODO make this lazy
     pub fn new() -> Config {
         let token = env::var("TOKEN").expect("Missing TOKEN env");
         let host = env::var("HOST").expect("Missing HOST env");

@@ -1,6 +1,7 @@
 // TODO think of a better name
 use crate::bike_service::Station;
-use crate::config::Config;
+use crate::handle_callback_query::ACTIVE_STATIONS_WARN;
+use crate::redis_helper;
 use chrono::prelude::*;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
@@ -8,9 +9,12 @@ use std::convert::From;
 use std::sync::Arc;
 use surf::Exception;
 use teloxide::prelude::*;
+use teloxide::requests::SendMessage;
+use teloxide::types::ParseMode;
 use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
+use teloxide::utils::markdown::{bold, escape};
 use uuid::Uuid;
-const LOW_PERCENTAGE_BIKES: f32 = 0.2; // 20%
+const LOW_PERCENTAGE_BIKES: f32 = 0.8; // 20%
 const WARN_INTERVAL_TIME: i64 = (60 * 5) - 5; // ~= 5 minutes
 
 fn reply_markup(station: &Station, uuid: &str) -> Option<InlineKeyboardMarkup> {
@@ -80,23 +84,44 @@ pub async fn reply_markups(stations: &[Station]) -> Vec<Option<InlineKeyboardMar
     reply_markups
 }
 
-pub async fn check_active_warn_stations(bot: Arc<Bot>) {
-    let client = redis::Client::open(Config::new().redis_url).unwrap(); // TODO set redis addres to env variable
-    let mut con = client.get_async_connection().await.unwrap();
-    let keys: Vec<String> = redis::AsyncCommands::keys(&mut con, "ACTIVE*")
-        .await
-        .unwrap();
+pub fn build_telegram_message(
+    station_warn: &StationWarn,
+    updated_station: &Station,
+    bot: Arc<Bot>,
+) -> Option<SendMessage> {
+    let updated_station_free_bikes = updated_station.free_bikes?;
+    let free_bikes_diff = updated_station_free_bikes as i32 - station_warn.free_bikes as i32;
+    let message = match free_bikes_diff {
+        i32::MIN..=-1 => format!(
+            "💔 `Station: {}` has lost {} bikes",
+            escape(&updated_station.name),
+            bold(&free_bikes_diff.abs().to_string())
+        ),
+        0 => return None,
+        1..=i32::MAX => format!(
+            "💚 {} has appeard on `Station: {}`!!! It now has {} bikes.",
+            bold(&free_bikes_diff.to_string()),
+            escape(&updated_station.name),
+            bold(&updated_station_free_bikes.to_string())
+        ),
+    };
+
+    // Build telegram message
+    let chat_id = station_warn.chat_id.unwrap_or_default();
+    let message_id = station_warn.message_id.unwrap_or_default();
+
+    let send_message = bot
+        .send_message(chat_id, message)
+        .reply_to_message_id(message_id)
+        .parse_mode(ParseMode::MarkdownV2);
+    Some(send_message)
+}
+pub async fn check_active_warn_stations(bot: Arc<Bot>) -> Result<(), Exception> {
+    let keys = redis_helper::keys(Some(&format!("{}*", ACTIVE_STATIONS_WARN))).await?;
     log::info!("Found {} station messages to be warned", &keys.len());
-    let pipeline = redis::Pipeline::new();
-    let data: Vec<String> = keys
-        .iter()
-        .fold(pipeline, |mut pipe, key| pipe.get(key).to_owned())
-        .atomic()
-        .query_async(&mut con)
-        .await
-        .unwrap();
+    let data = redis_helper::get_multiple(&keys).await?;
     let now = Utc::now();
-    let stations_to_be_warned: Vec<StationWarn> = data
+    let mut stations_to_be_warned: Vec<StationWarn> = data
         .into_iter()
         .map(|d| serde_json::from_str(&d).unwrap())
         .filter(|d: &StationWarn| now.timestamp() - d.updated_at.timestamp() > WARN_INTERVAL_TIME)
@@ -105,25 +130,49 @@ pub async fn check_active_warn_stations(bot: Arc<Bot>) {
         "{} StationWarn are older than 5 minutes",
         &stations_to_be_warned.len()
     ); // TODO remove this
+
     let updated_stations: Vec<_> = stations_to_be_warned
         .iter()
         .map(|w| Station::fetch(&w.id, &w.network_href))
         .collect();
     let updated_stations: Vec<Result<Station, Exception>> = join_all(updated_stations).await;
+    let send_messages: Vec<_> = stations_to_be_warned
+        .iter_mut()
+        .zip(updated_stations.iter())
+        .filter_map(|(station_warn, updated_station)| {
+            if let Ok(updated_station) = updated_station {
+                Some((station_warn, updated_station))
+            } else {
+                None
+            }
+        })
+        .map(|(station_warn, updated_station)| {
+            let send_message = build_telegram_message(station_warn, updated_station, bot.clone());
+            // updated station warn info
+            station_warn.updated_at = now;
+            station_warn.free_bikes = updated_station.free_bikes.unwrap_or_default();
 
-    // TODO CHECK any diff on free bikes
-    // TODO update station warn free_bikes prop and save on redis
-    // TODO Send message to user if it has changed
+            send_message
+        })
+        .filter_map(|message| message)
+        .collect();
 
-    // log::debug!("{:?} stations updated", update_stations);
-    // for d in stations_to_be_warned.iter() {
-    //     let chat_id = d.chat_id.unwrap();
-    //     let message_id = d.message_id.unwrap();
-    //     bot.send_message(chat_id, "Test message")
-    //         .reply_to_message_id(message_id)
-    //         .send()
-    //         .await
-    //         .log_on_error()
-    //         .await;
-    // }
+    let saves: Vec<(String, String)> = stations_to_be_warned
+        .iter()
+        .map(|station_warn| {
+            let key = format!("{}:{}", ACTIVE_STATIONS_WARN, station_warn.uuid);
+            let data = serde_json::to_string(station_warn).unwrap();
+            (key, data)
+        })
+        .collect();
+    redis_helper::set_multiple(&saves).await?;
+
+    let send_messages: Vec<_> = send_messages
+        .iter()
+        .map(|send_message| send_message.send())
+        .collect();
+
+    log::debug!("{} messages to be sent", &send_messages.len());
+    join_all(send_messages).await;
+    Ok(())
 }

@@ -1,8 +1,9 @@
 pub mod bike_service;
 mod config;
 mod error;
-mod handle_callback_query;
+pub mod handle_callback_query;
 mod handle_location;
+pub mod redis_helper;
 pub mod station_low_warn;
 mod web_hooks;
 use config::Config;
