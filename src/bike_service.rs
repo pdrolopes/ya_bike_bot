@@ -1,8 +1,16 @@
-use crate::error::InvalidBikeNetwork;
 use serde::{Deserialize, Serialize};
 use surf::Exception;
 const CITYBIKES_HOST: &str = "http://api.citybik.es";
 const NETWORKS_HREF: &str = "/v2/networks";
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum BikeServiceError {
+    #[error("Network with name:`{0}` does not have href value")]
+    InvalidBikeNetwork(String),
+    #[error("Station with id:`{0}` not found")]
+    StationNotFound(String),
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Location {
@@ -52,28 +60,45 @@ pub async fn fetch_networks() -> Result<Vec<Network>, Exception> {
     Ok(networks)
 }
 
+pub async fn fetch_stations(network_href: &str) -> Result<Vec<Station>, Exception> {
+    #[derive(Deserialize, Serialize)]
+    struct Response {
+        network: Network,
+    }
+    let Response { network } = surf::get(format!("{}{}", CITYBIKES_HOST, network_href))
+        .recv_json()
+        .await?;
+    let Network { stations, .. } = network;
+    let mut stations = stations.unwrap_or_else(|| vec![]);
+    stations.iter_mut().for_each(|station| {
+        station.network_href = Some(network_href.into());
+    });
+
+    Ok(stations)
+}
+
 impl Network {
     pub async fn stations(&self) -> Result<Vec<Station>, Exception> {
-        #[derive(Deserialize, Serialize)]
-        struct Response {
-            network: Network,
-        }
         let Network { href, name, .. } = self;
         let href = if let Some(href) = href {
             href
         } else {
-            return Err(Box::new(InvalidBikeNetwork::new(name.to_string())));
+            return Err(Box::new(BikeServiceError::InvalidBikeNetwork(
+                name.to_string(),
+            )));
         };
-        let Response { network } = surf::get(format!("{}{}", CITYBIKES_HOST, href))
-            .recv_json()
-            .await?;
-        let Network { stations, .. } = network;
-        let mut stations = stations.unwrap_or_else(|| vec![]);
-        stations.iter_mut().for_each(|station| {
-            station.network_href = Some(href.into());
-        });
+        fetch_stations(href).await
+    }
+}
 
-        Ok(stations)
+impl Station {
+    pub async fn fetch(id: &str, network_href: &str) -> Result<Self, Exception> {
+        log::debug!("Fetching single station with id `{}`", &id);
+        let stations = fetch_stations(network_href).await?;
+        stations
+            .into_iter()
+            .find(|station| station.id == id)
+            .ok_or(Box::new(BikeServiceError::StationNotFound(id.into())))
     }
 }
 
