@@ -28,6 +28,7 @@ fn reply_markup(station: &Station, uuid: &str) -> Option<InlineKeyboardMarkup> {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StationWarn {
+    uuid: String,
     network_href: String,
     free_bikes: u32,
     id: String,
@@ -41,7 +42,9 @@ impl From<&Station> for StationWarn {
         let network_href = station.network_href.as_ref().unwrap().into(); // TODO remove unwrap
         let free_bikes = station.free_bikes.unwrap();
         let id = station.id.clone();
+        let uuid = Uuid::new_v4().to_simple().to_string();
         StationWarn {
+            uuid,
             network_href,
             free_bikes,
             id,
@@ -53,28 +56,23 @@ impl From<&Station> for StationWarn {
 }
 
 pub async fn reply_markups(stations: &[Station]) -> Vec<Option<InlineKeyboardMarkup>> {
-    let uuids: Vec<String> = stations
-        .iter()
-        .map(|_| Uuid::new_v4().to_simple().to_string())
-        .collect();
+    let station_warns: Vec<StationWarn> = stations.iter().map(|station| station.into()).collect();
     let reply_markups: Vec<Option<InlineKeyboardMarkup>> = stations
         .iter()
-        .zip(uuids.iter())
-        .map(|(station, uuid)| reply_markup(station, &uuid))
+        .zip(station_warns.iter())
+        .map(|(station, warn)| reply_markup(station, &warn.uuid))
         .collect();
     let mut new_pipeline = redis::Pipeline::new();
-    let pipeline_set: &mut redis::Pipeline = stations
-        .iter()
-        .zip(uuids.into_iter())
-        .map(|(station, uuid)| {
-            dbg!(&uuid);
-            let station_warn: StationWarn = station.into();
-            let station_warn = serde_json::to_string(&station_warn).unwrap();
-            (uuid, station_warn)
-        })
-        .fold(&mut new_pipeline, |pipe, (uuid, station)| {
-            pipe.set(&uuid, station).ignore().expire(uuid, 60 * 60 * 12) // half day
-        });
+    let pipeline_set: &mut redis::Pipeline =
+        station_warns
+            .iter()
+            .fold(&mut new_pipeline, |pipe, station_warn| {
+                let uuid = &station_warn.uuid;
+                let station_warn = serde_json::to_string(&station_warn).unwrap();
+                pipe.set(uuid, station_warn)
+                    .ignore()
+                    .expire(uuid, 60 * 60 * 12) // half day
+            });
 
     let client = redis::Client::open(crate::config::Config::new().redis_url).unwrap(); // TODO set redis addres to env variable
     let mut con = client.get_async_connection().await.unwrap();
