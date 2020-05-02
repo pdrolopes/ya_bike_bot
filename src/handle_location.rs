@@ -55,7 +55,6 @@ pub async fn handle(context: &DispatcherHandlerCx<Message>) {
     let stations: Vec<Station> = stations.into_iter().take(take).collect();
 
     let send_messages_iter = stations.iter().map(|station| {
-        log::debug!("{:?}", station);
         context
             .answer(station.message())
             .parse_mode(ParseMode::MarkdownV2)
