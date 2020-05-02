@@ -116,7 +116,7 @@ This Bot was made with [Teloxide](https://github.com/teloxide/teloxide) library
 
 // TODO name this better
 fn start_station_warn_loop(bot: Arc<Bot>) {
-    dbg!("Started loop");
+    log::info!("Started loop");
     tokio::spawn(async move {
         loop {
             let bot = bot.clone();
