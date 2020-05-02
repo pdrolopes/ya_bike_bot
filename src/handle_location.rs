@@ -54,22 +54,29 @@ pub async fn handle(context: &DispatcherHandlerCx<Message>) {
     };
     let stations: Vec<Station> = stations.into_iter().take(take).collect();
 
-    let send_messages_iter = stations.iter().map(|station| {
-        context
-            .answer(station.message())
-            .parse_mode(ParseMode::MarkdownV2)
-            .disable_web_page_preview(true)
-            .disable_notification(true)
-    });
+    let send_messages: Vec<_> = stations
+        .iter()
+        .map(|station| {
+            context
+                .answer(station.message())
+                .parse_mode(ParseMode::MarkdownV2)
+                .disable_web_page_preview(true)
+                .disable_notification(true)
+        })
+        .collect();
     let reply_markups = reply_markups(&stations).await;
     let send_messages: Vec<_> = if let Ok(reply_markups) = reply_markups {
-        send_messages_iter
-            .zip(reply_markups.into_iter().filter_map(|rm| rm))
-            .map(|(send_message, reply_markup)| send_message.reply_markup(reply_markup))
+        send_messages
+            .into_iter()
+            .zip(reply_markups.into_iter())
+            .map(|(send_message, reply_markup)| match reply_markup {
+                Some(rm) => send_message.reply_markup(rm),
+                None => send_message,
+            })
             .collect()
     } else {
         log::error!("Error creating reply markups");
-        send_messages_iter.collect()
+        send_messages
     };
 
     for send_message in send_messages {
