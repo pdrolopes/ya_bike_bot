@@ -27,7 +27,7 @@ pub struct Network {
     stations: Option<Vec<Station>>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Station {
     pub free_bikes: Option<u32>,
     pub empty_slots: Option<u32>,
@@ -42,7 +42,7 @@ pub struct Station {
     pub network_href: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Extra {
     pub address: Option<String>,
     pub description: Option<String>,

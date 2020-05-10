@@ -1,10 +1,12 @@
 // TODO think of a better name
 use crate::bike_service::Station;
+use crate::models::CallbackData;
+use crate::models::StationReminderInfo;
 use crate::models::StationWarn;
 use crate::redis_helper;
+use anyhow::{anyhow, Result};
 use chrono::prelude::*;
 use futures::future::join_all;
-use std::convert::From;
 use std::sync::Arc;
 use surf::Exception;
 use teloxide::prelude::*;
@@ -35,25 +37,6 @@ impl StationWarn {
     }
 }
 
-impl From<&Station> for StationWarn {
-    fn from(station: &Station) -> Self {
-        let network_href = station.network_href.as_ref().unwrap().into(); // TODO remove unwrap
-        let free_bikes = station.free_bikes.unwrap();
-        let id = station.id.clone();
-        let uuid = Uuid::new_v4().to_simple().to_string();
-        StationWarn {
-            uuid,
-            network_href,
-            free_bikes,
-            id,
-            message_id: None,
-            chat_id: None,
-            updated_at: Utc::now(),
-            created_at: Utc::now(),
-        }
-    }
-}
-
 fn reply_markup(station: &Station, uuid: &str) -> Option<InlineKeyboardMarkup> {
     let free_bikes = station.free_bikes? as f32;
     let empty_slots = station.empty_slots? as f32;
@@ -63,25 +46,52 @@ fn reply_markup(station: &Station, uuid: &str) -> Option<InlineKeyboardMarkup> {
         return None;
     };
 
-    let button = InlineKeyboardButton::callback("Alert!".to_string(), uuid.into());
+    let button = InlineKeyboardButton::callback("Remind!".to_string(), uuid.into());
     Some(InlineKeyboardMarkup::default().append_row(vec![button]))
 }
 
-pub async fn reply_markups(
-    stations: &[Station],
-) -> Result<Vec<Option<InlineKeyboardMarkup>>, Exception> {
-    let station_warns: Vec<StationWarn> = stations.iter().map(|station| station.into()).collect();
-    let reply_markups: Vec<Option<InlineKeyboardMarkup>> = stations
+// TODO try to remove this
+fn try_from(station: Station) -> Result<StationReminderInfo> {
+    let network_href = station
+        .network_href
+        .ok_or(anyhow!("missing network_href"))?;
+    let free_bikes = station.free_bikes.ok_or(anyhow!("missing free bikes"))?;
+    let id = station.id;
+    let uuid = Uuid::new_v4().to_simple().to_string();
+    Ok(StationReminderInfo {
+        uuid,
+        network_href,
+        free_bikes,
+        id,
+    })
+}
+
+pub async fn reply_markups(stations: &[Station]) -> Result<Vec<Option<InlineKeyboardMarkup>>> {
+    // let station_warns: Vec<StationWarn> = stations.iter().map(|station| station.into()).collect();
+    let (reply_markups, station_reminders): (
+        Vec<Option<InlineKeyboardMarkup>>,
+        Vec<Option<StationReminderInfo>>,
+    ) = stations
         .iter()
-        .zip(station_warns.iter())
-        .map(|(station, warn)| reply_markup(station, &warn.uuid))
-        .collect();
-    let key_value: Vec<(String, String)> = station_warns
-        .iter()
-        .map(|station_warn| {
-            let uuid = &station_warn.uuid;
-            let station_warn = serde_json::to_string(&station_warn).unwrap_or_default();
-            (uuid.into(), station_warn)
+        .map(|station| {
+            let station_reminder_info = try_from(station.clone());
+            match station_reminder_info {
+                Ok(value) => match reply_markup(station, &value.uuid) {
+                    Some(rm) => (Some(rm), Some(value)),
+                    None => (None, None),
+                },
+                Err(_) => (None, None),
+            }
+        })
+        .unzip();
+    let key_value: Vec<(String, String)> = station_reminders
+        .into_iter()
+        .filter_map(|sr| sr)
+        .map(|station_reminder| {
+            let uuid = station_reminder.uuid.clone();
+            let callback_data: CallbackData = station_reminder.into();
+            let callback_data = serde_json::to_string(&callback_data).unwrap_or_default();
+            (uuid, callback_data)
         })
         .collect();
     redis_helper::set_multiple(&key_value, Some(INLINE_KEYBOARD_DATA_TTL)).await?;
@@ -95,7 +105,8 @@ pub fn build_telegram_message(
     bot: Arc<Bot>,
 ) -> Option<SendMessage> {
     let updated_station_free_bikes = updated_station.free_bikes?;
-    let free_bikes_diff = updated_station_free_bikes as i32 - station_warn.free_bikes as i32;
+    let free_bikes_diff =
+        updated_station_free_bikes as i32 - station_warn.station_info.free_bikes as i32;
     let message = match free_bikes_diff {
         i32::MIN..=-1 => format!(
             "💔 `{}` has lost {} bikes",
@@ -112,8 +123,8 @@ pub fn build_telegram_message(
     };
 
     // Build telegram message
-    let chat_id = station_warn.chat_id.unwrap_or_default();
-    let message_id = station_warn.message_id.unwrap_or_default();
+    let chat_id = station_warn.chat_id;
+    let message_id = station_warn.message_id;
 
     let send_message = bot
         .send_message(chat_id, message)
@@ -143,11 +154,11 @@ pub async fn check_active_warn_stations(bot: Arc<Bot>) -> Result<(), Exception> 
     log::info!(
         "{} StationWarn are older than 5 minutes",
         &stations_to_be_warned.len()
-    ); // TODO remove this
+    );
 
     let updated_stations: Vec<_> = stations_to_be_warned
         .iter()
-        .map(|w| Station::fetch(&w.id, &w.network_href))
+        .map(|w| Station::fetch(&w.station_info.id, &w.station_info.network_href))
         .collect();
     let updated_stations: Vec<Result<Station, Exception>> = join_all(updated_stations).await;
     let send_messages: Vec<_> = stations_to_be_warned
@@ -164,7 +175,7 @@ pub async fn check_active_warn_stations(bot: Arc<Bot>) -> Result<(), Exception> 
             let send_message = build_telegram_message(station_warn, updated_station, bot.clone());
             // updated station warn info
             station_warn.updated_at = Utc::now();
-            station_warn.free_bikes = updated_station.free_bikes.unwrap_or_default();
+            station_warn.station_info.free_bikes = updated_station.free_bikes.unwrap_or_default();
 
             send_message
         })
