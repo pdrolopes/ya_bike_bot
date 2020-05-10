@@ -1,16 +1,8 @@
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use surf::Exception;
 const CITYBIKES_HOST: &str = "http://api.citybik.es";
 const NETWORKS_HREF: &str = "/v2/networks";
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum BikeServiceError {
-    #[error("Network with name:`{0}` does not have href value")]
-    InvalidBikeNetwork(String),
-    #[error("Station with id:`{0}` not found")]
-    StationNotFound(String),
-}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Location {
@@ -80,14 +72,10 @@ pub async fn fetch_stations(network_href: &str) -> Result<Vec<Station>, Exceptio
 impl Network {
     pub async fn stations(&self) -> Result<Vec<Station>, Exception> {
         let Network { href, name, .. } = self;
-        let href = if let Some(href) = href {
-            href
-        } else {
-            return Err(Box::new(BikeServiceError::InvalidBikeNetwork(
-                name.to_string(),
-            )));
-        };
-        fetch_stations(href).await
+        let href = href
+            .as_ref()
+            .ok_or_else(|| anyhow!("Invalid bike network, name:'{}'", name))?;
+        fetch_stations(&href).await
     }
 }
 
@@ -98,7 +86,7 @@ impl Station {
         stations
             .into_iter()
             .find(|station| station.id == id)
-            .ok_or(Box::new(BikeServiceError::StationNotFound(id.into())))
+            .ok_or_else(|| anyhow!("Station not found. Id: {}", id).into())
     }
 }
 

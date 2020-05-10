@@ -2213,7 +2213,6 @@ dependencies = [
  "serde_json",
  "surf",
  "teloxide",
- "thiserror",
  "tokio",
  "url",
  "uuid",
