@@ -29,17 +29,23 @@ pub struct StationReminderInfo {
     pub id: String,
 }
 
-// impl TryFrom<Station> for StationReminderInfo {
-//     fn try_from(station: Station) -> Result<Self> {
-//         let network_href = station.network_href?;
-//         let free_bikes = station.free_bikes?;
-//         let id = station.id;
-//         let uuid = Uuid::new_v4().to_simple().to_string();
-//         StationReminderInfo {
-//             uuid,
-//             network_href,
-//             free_bikes,
-//             id,
-//         }
-//     }
-// }
+impl TryFrom<Station> for StationReminderInfo {
+    type Error = anyhow::Error;
+
+    fn try_from(station: Station) -> Result<Self> {
+        let network_href = station
+            .network_href
+            .ok_or_else(|| anyhow!("missing network_href"))?;
+        let free_bikes = station
+            .free_bikes
+            .ok_or_else(|| anyhow!("missing free bikes"))?;
+        let id = station.id;
+        let uuid = Uuid::new_v4().to_simple().to_string();
+        Ok(StationReminderInfo {
+            uuid,
+            network_href,
+            free_bikes,
+            id,
+        })
+    }
+}

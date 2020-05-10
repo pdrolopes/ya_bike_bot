@@ -99,8 +99,13 @@ impl Station {
         let description = self
             .extra
             .as_ref()
-            .and_then(|extra| extra.description.as_ref().or(extra.address.as_ref()))
-            .map(|value| value.clone())
+            .and_then(|extra| {
+                extra
+                    .description
+                    .as_ref()
+                    .or_else(|| extra.address.as_ref())
+            })
+            .cloned()
             .unwrap_or_default();
         let description = italic(&escape(&description));
         format!(

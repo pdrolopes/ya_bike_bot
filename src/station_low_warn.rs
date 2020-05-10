@@ -4,9 +4,10 @@ use crate::models::CallbackData;
 use crate::models::StationReminderInfo;
 use crate::models::StationWarn;
 use crate::redis_helper;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use chrono::prelude::*;
 use futures::future::join_all;
+use std::convert::TryFrom;
 use std::sync::Arc;
 use surf::Exception;
 use teloxide::prelude::*;
@@ -14,10 +15,9 @@ use teloxide::requests::SendMessage;
 use teloxide::types::ParseMode;
 use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
 use teloxide::utils::markdown::{bold, escape};
-use uuid::Uuid;
 const LOW_PERCENTAGE_BIKES: f32 = 0.2; // 20%
 const WARN_INTERVAL_TIME: i64 = (60 * 5) - 5; // ~= 5 minutes
-const INLINE_KEYBOARD_DATA_TTL: usize = 60 * 60 * 6; // 6 horas
+const INLINE_KEYBOARD_DATA_TTL: usize = 60 * 60 * 6; // 6 hours
 const ACTIVE_STATIONS_WARN: &str = "ACTIVE_STATIONS_WARN";
 pub const STATION_WARN_TTL: i64 = 60 * 30; // 30 minutes
 
@@ -50,22 +50,6 @@ fn reply_markup(station: &Station, uuid: &str) -> Option<InlineKeyboardMarkup> {
     Some(InlineKeyboardMarkup::default().append_row(vec![button]))
 }
 
-// TODO try to remove this
-fn try_from(station: Station) -> Result<StationReminderInfo> {
-    let network_href = station
-        .network_href
-        .ok_or(anyhow!("missing network_href"))?;
-    let free_bikes = station.free_bikes.ok_or(anyhow!("missing free bikes"))?;
-    let id = station.id;
-    let uuid = Uuid::new_v4().to_simple().to_string();
-    Ok(StationReminderInfo {
-        uuid,
-        network_href,
-        free_bikes,
-        id,
-    })
-}
-
 pub async fn reply_markups(stations: &[Station]) -> Result<Vec<Option<InlineKeyboardMarkup>>> {
     // let station_warns: Vec<StationWarn> = stations.iter().map(|station| station.into()).collect();
     let (reply_markups, station_reminders): (
@@ -74,7 +58,7 @@ pub async fn reply_markups(stations: &[Station]) -> Result<Vec<Option<InlineKeyb
     ) = stations
         .iter()
         .map(|station| {
-            let station_reminder_info = try_from(station.clone());
+            let station_reminder_info = StationReminderInfo::try_from(station.clone());
             match station_reminder_info {
                 Ok(value) => match reply_markup(station, &value.uuid) {
                     Some(rm) => (Some(rm), Some(value)),

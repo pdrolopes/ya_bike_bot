@@ -33,18 +33,15 @@ async fn create_station_warn(callback_query: &CallbackQuery, bot: Arc<Bot>) -> R
     let callback_data = callback_query
         .data
         .as_ref()
-        .ok_or(anyhow!("Missing uuid on callback data"))?;
+        .ok_or_else(|| anyhow!("Missing uuid on callback data"))?;
     let message = callback_query
         .message
         .as_ref()
-        .ok_or(anyhow!("Missing message information on callback data"))?;
+        .ok_or_else(|| anyhow!("Missing message information on callback data"))?;
 
     let data: String = redis_helper::get(&callback_data).await?;
     let data: CallbackData = serde_json::from_str(&data)?;
-    let station_info = match data {
-        CallbackData::StartStationReminder(value) => value,
-        _ => return Err(anyhow!("Callback data can't be parsed")),
-    };
+    let CallbackData::StartStationReminder(station_info) = data;
 
     let station_warn = StationWarn {
         station_info,
@@ -57,7 +54,7 @@ async fn create_station_warn(callback_query: &CallbackQuery, bot: Arc<Bot>) -> R
 
     let key = station_warn.id();
     let data = serde_json::to_string(&station_warn)?;
-    redis_helper::set_multiple(&vec![(key, data)], None).await?;
+    redis_helper::set_multiple(&[(key, data)], None).await?;
 
     bot.edit_message_reply_markup(ChatOrInlineMessage::Chat {
         chat_id: ChatId::Id(message.chat.id),
