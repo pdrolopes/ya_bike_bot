@@ -2,6 +2,7 @@ pub mod bike_service;
 mod config;
 pub mod handle_callback_query;
 mod handle_location;
+pub mod models;
 pub mod redis_helper;
 pub mod station_low_warn;
 mod web_hooks;

@@ -1,9 +1,9 @@
 // TODO think of a better name
 use crate::bike_service::Station;
+use crate::models::StationWarn;
 use crate::redis_helper;
 use chrono::prelude::*;
 use futures::future::join_all;
-use serde::{Deserialize, Serialize};
 use std::convert::From;
 use std::sync::Arc;
 use surf::Exception;
@@ -19,17 +19,6 @@ const INLINE_KEYBOARD_DATA_TTL: usize = 60 * 60 * 6; // 6 horas
 const ACTIVE_STATIONS_WARN: &str = "ACTIVE_STATIONS_WARN";
 pub const STATION_WARN_TTL: i64 = 60 * 30; // 30 minutes
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct StationWarn {
-    uuid: String,
-    network_href: String,
-    free_bikes: u32,
-    id: String,
-    pub message_id: Option<i32>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub chat_id: Option<i64>,
-}
 impl StationWarn {
     pub fn id(&self) -> String {
         format!("{}:{}", ACTIVE_STATIONS_WARN, self.uuid)
